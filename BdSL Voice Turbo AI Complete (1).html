@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BdSL Voice - প্রো এআই বাংলা ইশারা অনুবাদক</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Ultra-Fast MediaPipe Hands AI (Zero-Lag Mobile Optimized) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <!-- Google Fonts: Hind Siliguri -->
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Hind Siliguri', sans-serif;
+            background-color: #020617;
+            color: #f8fafc;
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .mirror-video {
+            transform: scaleX(-1);
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.35); }
+            50% { box-shadow: 0 0 28px rgba(16, 185, 129, 0.75); }
+        }
+        .active-glow {
+            animation: pulse-glow 2s infinite;
+        }
+        @keyframes wave-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+        .speaking-pulse {
+            animation: wave-pulse 0.6s infinite;
+            background-color: rgba(16, 185, 129, 0.35) !important;
+            border-color: #10b981 !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between bg-slate-950">
+
+    <!-- Top Header -->
+    <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <i class="fa-solid fa-hands-asl-interpreting text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm text-white leading-none">BdSL Voice <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded ml-1">TURBO PRO</span></h1>
+                <span id="aiModeBadge" class="text-[10px] text-emerald-400">স্মুথ ডুয়াল-হ্যান্ড এআই ইঞ্জিন</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+            <button onclick="toggleTrainerModal()" title="AI ট্রেইন করুন" class="px-2.5 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 text-xs font-semibold flex items-center gap-1 transition active:scale-95">
+                <i class="fa-solid fa-graduation-cap"></i> ট্রেইন AI
+            </button>
+            <button onclick="switchCamera()" title="ক্যামেরা পরিবর্তন" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex items-center justify-center transition active:scale-95">
+                <i class="fa-solid fa-camera-rotate text-xs"></i>
+            </button>
+            <div id="statusIndicator" class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-2 py-1.5 rounded-xl text-[11px] font-medium text-slate-300">
+                <span id="statusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+                <span id="statusText">প্রস্তুত</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col max-w-lg w-full mx-auto p-3 gap-2.5">
+        
+        <!-- Camera Viewport -->
+        <div class="relative w-full aspect-[4/3] bg-slate-900 rounded-3xl overflow-hidden border-2 border-slate-800 shadow-2xl">
+            <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover mirror-video"></video>
+            <canvas id="outputCanvas" class="absolute inset-0 w-full h-full object-cover pointer-events-none mirror-video"></canvas>
+
+            <!-- Live Status Pills -->
+            <div class="absolute top-3 left-3 z-20 flex flex-wrap gap-1.5">
+                <div class="bg-slate-950/85 backdrop-blur-md text-emerald-400 text-[10px] font-semibold px-2.5 py-1 rounded-full border border-emerald-500/40 flex items-center gap-1">
+                    <i class="fa-solid fa-bolt text-amber-400"></i> <span id="fpsCounter">Dual-Hand Turbo</span>
+                </div>
+            </div>
+
+            <!-- Instant Detection Feedback -->
+            <div id="lockProgressBadge" class="absolute top-3 right-3 z-20 bg-emerald-500 text-slate-950 text-[10px] font-bold px-2.5 py-1 rounded-full hidden shadow-lg">
+                শনাক্ত ✓
+            </div>
+
+            <!-- Bottom Hand Status Pill -->
+            <div class="absolute inset-x-0 bottom-0 flex justify-center pointer-events-none z-20">
+                <span id="handCountBadge" class="text-[10px] text-emerald-300 bg-slate-950/85 px-3 py-1 rounded-full backdrop-blur-sm mb-2.5 border border-slate-800 transition-all">
+                    ক্যামেরার সামনে হাত আনুন
+                </span>
+            </div>
+
+            <!-- Start Camera Overlay Button -->
+            <div id="startOverlay" class="absolute inset-0 bg-slate-900/95 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center">
+                <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mb-4 active-glow">
+                    <i class="fa-solid fa-hands-asl-interpreting text-2xl"></i>
+                </div>
+                <h2 class="text-lg font-bold text-white mb-1">টার্বো AI অনুবাদক চালু করুন</h2>
+                <p class="text-xs text-slate-400 mb-5 max-w-xs">জিরো-ল্যাগ ডুয়াল-হ্যান্ড ডিটেকশন এবং রিয়েল-টাইম বাংলা ভয়েস ইঞ্জিন</p>
+                <button id="startBtn" type="button" class="relative z-40 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-2xl shadow-lg shadow-emerald-500/25 active:scale-95 transition-all flex items-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-power-off"></i> অনুবাদ শুরু করুন
+                </button>
+                <p id="errorMsg" class="text-xs text-rose-400 mt-3 hidden"></p>
+            </div>
+        </div>
+
+        <!-- Live Translation & Sentence Builder Card -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-3.5 shadow-xl flex flex-col gap-2.5">
+            
+            <!-- Instant Detected Word -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 block">তাৎক্ষণিক শনাক্তকৃত অর্থ</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="currentWord" class="text-2xl font-bold text-emerald-400 transition-all">অপেক্ষা করছে...</span>
+                        <span id="gestureSourceTag" class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md hidden">AI</span>
+                    </div>
+                </div>
+                <button id="speakerBtn" type="button" onclick="speakCurrentWord()" title="ভয়েস শুনুন" class="w-11 h-11 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 flex items-center justify-center active:scale-95 transition">
+                    <i class="fa-solid fa-volume-high text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Confidence Progress Bar -->
+            <div>
+                <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <span>AI কনফিডেন্স স্কোর</span>
+                    <span id="confidencePercent" class="text-emerald-400 font-semibold">0%</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="confidenceBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-150" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Continuous Sentence Builder Box -->
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] text-slate-400 font-medium">পূর্ণাঙ্গ বাক্য (হাত নামালেই অটো ভয়েস বলবে):</span>
+                    <label class="flex items-center gap-1.5 text-[11px] text-emerald-400 cursor-pointer font-medium">
+                        <input type="checkbox" id="autoSpeak" checked class="accent-emerald-500 rounded">
+                        অটো ভয়েস
+                    </label>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                    <p id="sentenceOutput" class="text-base font-semibold text-white min-h-[24px] flex-1 break-words">...</p>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button type="button" onclick="speakSentence()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1 active:scale-95 transition">
+                            <i class="fa-solid fa-volume-high"></i> বলুন
+                        </button>
+                        <button type="button" onclick="clearSentence()" title="মুছুন" class="w-8 h-8 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 flex items-center justify-center active:scale-95 transition">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Practical Gesture Guide Chips -->
+            <div>
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[10px] text-slate-400">দ্রুত কথোপকথন ইশারা (হাত দেখান বা ট্যাপ করুন):</span>
+                    <span id="trainedCountBadge" class="text-[10px] text-sky-400 font-medium">কাস্টম ডাটা: 0</span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 text-center">
+                    <button type="button" onclick="manualTrigger('আসসালামু আলাইকুম', '২ হাত জোড় 🙏')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-emerald-400">আসসালামু আলাইকুম</span>
+                        <span class="block text-[9px] text-slate-400">২ হাত জোড় 🙏</span>
+                    </button>
+                    <button type="button" onclick="manualTrigger('আপনি', '১ আঙুল ☝️')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-sky-400">আপনি</span>
+                        <span class="block text-[9px] text-slate-400">১ আঙুল ☝️</span>
+                    </button>
+                    <button type="button" onclick="manualTrigger('কেমন আছেন?', 'খোলা হাত 🖐️')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-amber-400">কেমন আছেন?</span>
+                        <span class="block text-[9px] text-slate-400">খোলা হাত 🖐️</span>
+                    </button>
+                    <button type="button" onclick="manualTrigger('আমি', 'মুষ্টিবদ্ধ হাত ✊')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-purple-400">আমি</span>
+                        <span class="block text-[9px] text-slate-400">মুষ্টিবদ্ধ হাত ✊</span>
+                    </button>
+                    <button type="button" onclick="manualTrigger('ভালো আছি', 'থাম্বস আপ 👍')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-emerald-300">ভালো আছি</span>
+                        <span class="block text-[9px] text-slate-400">বৃদ্ধাঙ্গুলি 👍</span>
+                    </button>
+                    <button type="button" onclick="manualTrigger('আপনার দিনকাল কেমন যাচ্ছে?', 'ILY ইশারা 🤟')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-rose-400">দিনকাল কেমন যাচ্ছে?</span>
+                        <span class="block text-[9px] text-slate-400">ILY সাইন 🤟</span>
+                    </button>
+                    <button type="button" onclick="manualTrigger('সাহায্য প্রয়োজন', '২ আঙুল ✌️')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-amber-300">সাহায্য প্রয়োজন</span>
+                        <span class="block text-[9px] text-slate-400">২ আঙুল ✌️</span>
+                    </button>
+                    <button type="button" onclick="manualTrigger('ধন্যবাদ', 'OK ইশারা 👌')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-white">ধন্যবাদ</span>
+                        <span class="block text-[9px] text-slate-400">OK সাইন 👌</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Custom Error / Info Toast -->
+    <div id="customToast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-4 py-2.5 rounded-full border border-slate-700 shadow-xl z-50 hidden"></div>
+
+    <!-- Live Custom AI Training Modal (KNN Vector Trainer) -->
+    <div id="trainerModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-5 shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-brain text-emerald-400"></i> লাইভ AI মডেল ট্রেইনার
+                </h3>
+                <button type="button" onclick="toggleTrainerModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">আপনার নিজের হাতের যেকোনো ইশারা ক্যামেরার সামনে ধরে নিচের শব্দগুলোতে ২-৩ বার চাপ দিয়ে AI-কে শিখিয়ে দিন:</p>
+            
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <button type="button" onclick="captureTrainingSample('আসসালামু আলাইকুম')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-emerald-400">আসসালামু আলাইকুম</span>
+                    <span id="count_আসসালামু আলাইকুম" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button type="button" onclick="captureTrainingSample('আপনি কেমন আছেন?')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-sky-400">আপনি কেমন আছেন?</span>
+                    <span id="count_আপনি কেমন আছেন?" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button type="button" onclick="captureTrainingSample('আমি ভালো আছি')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-amber-400">আমি ভালো আছি</span>
+                    <span id="count_আমি ভালো আছি" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button type="button" onclick="captureTrainingSample('আপনার দিনকাল কেমন যাচ্ছে?')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-rose-400">দিনকাল কেমন যাচ্ছে?</span>
+                    <span id="count_আপনার দিনকাল কেমন যাচ্ছে?" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button type="button" onclick="captureTrainingSample('সাহায্য প্রয়োজন')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-purple-400">সাহায্য প্রয়োজন</span>
+                    <span id="count_সাহায্য প্রয়োজন" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button type="button" onclick="captureTrainingSample('ধন্যবাদ')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-white">ধন্যবাদ</span>
+                    <span id="count_ধন্যবাদ" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+            </div>
+
+            <div id="trainFeedback" class="text-xs text-center text-emerald-400 mb-3 hidden">✓ ইশারার ভেক্টর ডাটা সফলভাবে যুক্ত হয়েছে!</div>
+
+            <div class="flex justify-between gap-2">
+                <button type="button" onclick="resetCustomTraining()" class="px-3 py-2 rounded-xl bg-rose-500/15 text-rose-400 text-xs font-semibold border border-rose-500/30">
+                    ডাটা রিসেট
+                </button>
+                <button type="button" onclick="toggleTrainerModal()" class="px-5 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-bold">
+                    সম্পন্ন করুন
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStream = null;
+        let facingMode = "user";
+        let sentenceWords = [];
+        let handsDetector = null;
+        let isRunningAI = false;
+        let isProcessingFrame = false;
+        let lastFrameTime = 0;
+
+        let latestHandVector = null;
+        let customTrainingData = [];
+
+        try {
+            const saved = localStorage.getItem('bdsl_custom_vectors_v1');
+            if (saved) customTrainingData = JSON.parse(saved);
+        } catch (e) {}
+
+        const REQUIRED_FRAMES = 3;
+        const SENTENCE_PAUSE_MS = 1100;
+        let predictionBuffer = [];
+        let lastCapturedWord = "";
+        let lastCapturedTime = 0;
+        let sentenceSpeakTimer = null;
+        let hasSpokenCurrentSentence = false;
+        let availableVoices = [];
+        let sharedAudioCtx = null;
+
+        function showErrorBox(msg) {
+            const errorMsg = document.getElementById('errorMsg');
+            if (errorMsg) {
+                errorMsg.innerText = msg;
+                errorMsg.classList.remove('hidden');
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('customToast');
+            if (!toast) return;
+            toast.innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2800);
+        }
+
+        // Catch any unexpected JS errors and show clearly on screen
+        window.addEventListener('error', function (event) {
+            showErrorBox("স্ক্রিপ্ট ত্রুটি: " + (event.message || "অজানা সমস্যা"));
+        });
+
+        function loadVoices() {
+            if ('speechSynthesis' in window) {
+                const voices = window.speechSynthesis.getVoices();
+                if (voices && voices.length > 0) {
+                    availableVoices = voices;
+                }
+            }
+        }
+        if ('speechSynthesis' in window) {
+            loadVoices();
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        function unlockAudioEngine() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx && !sharedAudioCtx) {
+                    sharedAudioCtx = new AudioCtx();
+                }
+                if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+                    sharedAudioCtx.resume();
+                }
+                if ('speechSynthesis' in window) {
+                    loadVoices();
+                    window.speechSynthesis.resume();
+                }
+            } catch (e) {}
+        }
+
+        async function requestCameraStream() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("এই ব্রাউজারে ক্যামেরা API সাপোর্ট করছে না (HTTPS প্রয়োজন)।");
+            }
+
+            const attemptConfigs = [
+                {
+                    video: {
+                        facingMode: { ideal: facingMode },
+                        width: { ideal: 320 },
+                        height: { ideal: 240 }
+                    },
+                    audio: false
+                },
+                {
+                    video: { facingMode: facingMode },
+                    audio: false
+                },
+                {
+                    video: true,
+                    audio: false
+                }
+            ];
+
+            let lastError = null;
+            for (const cfg of attemptConfigs) {
+                try {
+                    return await navigator.mediaDevices.getUserMedia(cfg);
+                } catch (err) {
+                    lastError = err;
+                }
+            }
+            throw lastError || new Error("ক্যামেরা অ্যাক্সেস পাওয়া যায়নি।");
+        }
+
+        async function startCamera() {
+            const video = document.getElementById('webcam');
+            const overlay = document.getElementById('startOverlay');
+            const errorMsg = document.getElementById('errorMsg');
+            const startBtn = document.getElementById('startBtn');
+
+            if (errorMsg) errorMsg.classList.add('hidden');
+            if (startBtn) {
+                startBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ক্যামেরা ও AI চালু হচ্ছে...`;
+                startBtn.disabled = true;
+            }
+            updateStatus("চালু হচ্ছে", "bg-sky-400");
+
+            unlockAudioEngine();
+
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                currentStream = await requestCameraStream();
+                video.srcObject = currentStream;
+
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play().then(resolve).catch(resolve);
+                    };
+                    setTimeout(resolve, 1200);
+                });
+
+                if (overlay) overlay.classList.add('hidden');
+                updateStatus("AI সক্রিয়", "bg-emerald-400");
+                updateTrainingUI();
+
+                playToneFeedback(660, 880, 0.16);
+                setTimeout(() => speakText("টার্বো এআই যুক্ত হয়েছে"), 120);
+
+                await initTurboHandsAI();
+                isRunningAI = true;
+                requestAnimationFrame(processVideoLoop);
+
+            } catch (err) {
+                console.error("Camera Error:", err);
+                if (startBtn) {
+                    startBtn.innerHTML = `<i class="fa-solid fa-power-off"></i> অনুবাদ শুরু করুন`;
+                    startBtn.disabled = false;
+                }
+                const detail = err && err.name ? ` (${err.name})` : "";
+                showErrorBox("ক্যামেরা চালু করা যায়নি" + detail + "! ব্রাউজার ও ফোনের ক্যামেরা পারমিশন চেক করুন।");
+                updateStatus("ত্রুটি", "bg-rose-500");
+            }
+        }
+
+        // Bind start button cleanly for both click and touch
+        (function bindStartButton() {
+            const startBtn = document.getElementById('startBtn');
+            if (startBtn) {
+                startBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    startCamera();
+                });
+            }
+        })();
+
+        async function switchCamera() {
+            facingMode = (facingMode === "user") ? "environment" : "user";
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('outputCanvas');
+
+            if (facingMode === "environment") {
+                video.classList.remove('mirror-video');
+                canvas.classList.remove('mirror-video');
+            } else {
+                video.classList.add('mirror-video');
+                canvas.classList.add('mirror-video');
+            }
+
+            if (currentStream) {
+                await startCamera();
+            }
+        }
+
+        function updateStatus(text, dotColorClass) {
+            const statusText = document.getElementById('statusText');
+            const dot = document.getElementById('statusDot');
+            if (statusText) statusText.innerText = text;
+            if (dot) dot.className = `w-2 h-2 rounded-full ${dotColorClass}`;
+        }
+
+        async function initTurboHandsAI() {
+            if (handsDetector || typeof Hands === 'undefined') return;
+
+            handsDetector = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+
+            handsDetector.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 0,
+                minDetectionConfidence: 0.42,
+                minTrackingConfidence: 0.42
+            });
+
+            handsDetector.onResults(onHandsResults);
+        }
+
+        async function processVideoLoop(timestamp) {
+            if (!isRunningAI) return;
+
+            const video = document.getElementById('webcam');
+            if (handsDetector && video && video.readyState >= 2 && !isProcessingFrame && (timestamp - lastFrameTime) >= 36) {
+                lastFrameTime = timestamp;
+                isProcessingFrame = true;
+                try {
+                    await handsDetector.send({ image: video });
+                } catch (e) {
+                    console.warn("Frame skip:", e);
+                }
+                isProcessingFrame = false;
+            }
+
+            requestAnimationFrame(processVideoLoop);
+        }
+
+        function extractNormalizedVector(landmarks) {
+            const wrist = landmarks[0];
+            const midBase = landmarks[9];
+            const scale = Math.hypot(midBase.x - wrist.x, midBase.y - wrist.y) || 0.001;
+            const vec = [];
+            for (let i = 0; i < 21; i++) {
+                vec.push((landmarks[i].x - wrist.x) / scale);
+                vec.push((landmarks[i].y - wrist.y) / scale);
+            }
+            return vec;
+        }
+
+        function matchCustomKNN(currentVec) {
+            if (customTrainingData.length === 0 || !currentVec) return null;
+
+            let bestWord = null;
+            let minDistance = Infinity;
+
+            for (const sample of customTrainingData) {
+                let sumSq = 0;
+                for (let i = 0; i < currentVec.length; i++) {
+                    const diff = currentVec[i] - sample.vector[i];
+                    sumSq += diff * diff;
+                }
+                const dist = Math.sqrt(sumSq / currentVec.length);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestWord = sample.word;
+                }
+            }
+
+            if (minDistance < 0.45) {
+                const conf = Math.min(99, Math.max(85, Math.round((1 - minDistance) * 115)));
+                return { word: bestWord, confidence: conf, source: "কাস্টম AI" };
+            }
+            return null;
+        }
+
+        function onHandsResults(results) {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('outputCanvas');
+            const ctx = canvas.getContext('2d');
+
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                canvas.width = video.videoWidth || 320;
+                canvas.height = video.videoHeight || 240;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const hands = results.multiHandLandmarks || [];
+            const handCountBadge = document.getElementById('handCountBadge');
+
+            if (hands.length === 0) {
+                latestHandVector = null;
+                predictionBuffer = [];
+                document.getElementById('lockProgressBadge').classList.add('hidden');
+                handCountBadge.innerText = "ক্যামেরার সামনে হাত আনুন";
+                handCountBadge.className = "text-[10px] text-slate-300 bg-slate-950/85 px-3 py-1 rounded-full backdrop-blur-sm mb-2.5 border border-slate-800 transition-all";
+
+                if (sentenceWords.length > 0 && !hasSpokenCurrentSentence && !sentenceSpeakTimer) {
+                    sentenceSpeakTimer = setTimeout(() => {
+                        if (document.getElementById('autoSpeak').checked && sentenceWords.length > 0) {
+                            speakSentence();
+                            hasSpokenCurrentSentence = true;
+                        }
+                        sentenceSpeakTimer = null;
+                    }, SENTENCE_PAUSE_MS);
+                }
+                return;
+            }
+
+            if (sentenceSpeakTimer) {
+                clearTimeout(sentenceSpeakTimer);
+                sentenceSpeakTimer = null;
+            }
+
+            hands.forEach((lm, idx) => {
+                drawFastSkeleton(ctx, lm, canvas.width, canvas.height, idx === 0 ? '#10b981' : '#38bdf8');
+            });
+
+            if (hands.length === 2) {
+                handCountBadge.innerText = "২ হাত শনাক্ত ✓ (হাত জোড় করলে সালাম)";
+                handCountBadge.className = "text-[10px] text-emerald-300 bg-emerald-950/90 px-3 py-1 rounded-full backdrop-blur-sm mb-2.5 border border-emerald-500/40 font-semibold transition-all";
+            } else {
+                handCountBadge.innerText = "১ হাত শনাক্ত ✓";
+                handCountBadge.className = "text-[10px] text-sky-300 bg-slate-950/85 px-3 py-1 rounded-full backdrop-blur-sm mb-2.5 border border-sky-500/30 transition-all";
+            }
+
+            latestHandVector = extractNormalizedVector(hands[0]);
+            const prediction = classifyTurboGesture(hands, latestHandVector);
+
+            if (prediction) {
+                handleFastPrediction(prediction.word, prediction.confidence, prediction.source);
+            }
+        }
+
+        function drawFastSkeleton(ctx, landmarks, w, h, color) {
+            const connections = [
+                [0,1],[1,2],[2,3],[3,4],
+                [0,5],[5,6],[6,7],[7,8],
+                [0,9],[9,10],[10,11],[11,12],
+                [0,13],[13,14],[14,15],[15,16],
+                [0,17],[17,18],[18,19],[19,20],
+                [5,9],[9,13],[13,17]
+            ];
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            for (const [a, b] of connections) {
+                ctx.moveTo(landmarks[a].x * w, landmarks[a].y * h);
+                ctx.lineTo(landmarks[b].x * w, landmarks[b].y * h);
+            }
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 21; i += 2) {
+                ctx.beginPath();
+                ctx.arc(landmarks[i].x * w, landmarks[i].y * h, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function dist(a, b) {
+            return Math.hypot(a.x - b.x, a.y - b.y);
+        }
+
+        function classifyTurboGesture(hands, vec) {
+            const customMatch = matchCustomKNN(vec);
+            if (customMatch) return customMatch;
+
+            if (hands.length === 2) {
+                const h1 = hands[0];
+                const h2 = hands[1];
+                const wristDist = dist(h1[0], h2[0]);
+                const palmCenterDist = dist(h1[9], h2[9]);
+                const indexTipDist = dist(h1[8], h2[8]);
+
+                if (wristDist < 0.42 || palmCenterDist < 0.36 || indexTipDist < 0.32) {
+                    return { word: "আসসালামু আলাইকুম", confidence: 98, source: "২ হাত জোড় 🙏" };
+                }
+            }
+
+            const lm = hands[0];
+            const wrist = lm[0];
+            const palmSize = dist(wrist, lm[9]) || 0.1;
+
+            const isIndexOpen = dist(lm[8], wrist) > dist(lm[6], wrist) * 1.08;
+            const isMiddleOpen = dist(lm[12], wrist) > dist(lm[10], wrist) * 1.08;
+            const isRingOpen = dist(lm[16], wrist) > dist(lm[14], wrist) * 1.08;
+            const isPinkyOpen = dist(lm[20], wrist) > dist(lm[18], wrist) * 1.08;
+            const isThumbExtended = dist(lm[4], lm[17]) > palmSize * 1.15;
+
+            const pinchRatio = dist(lm[4], lm[8]) / palmSize;
+            const openFingersCount = [isIndexOpen, isMiddleOpen, isRingOpen, isPinkyOpen].filter(Boolean).length;
+
+            if (pinchRatio < 0.38 && isMiddleOpen && isRingOpen) {
+                return { word: "ধন্যবাদ", confidence: 95, source: "OK সাইন 👌" };
+            }
+            if (isIndexOpen && isPinkyOpen && !isMiddleOpen && !isRingOpen) {
+                return { word: "আপনার দিনকাল কেমন যাচ্ছে?", confidence: 95, source: "ILY সাইন 🤟" };
+            }
+            if (!isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen && lm[4].y < lm[3].y - 0.03) {
+                return { word: "ভালো আছি", confidence: 94, source: "বৃদ্ধাঙ্গুলি 👍" };
+            }
+            if (openFingersCount === 0 && !isThumbExtended) {
+                return { word: "আমি", confidence: 93, source: "মুষ্টিবদ্ধ হাত ✊" };
+            }
+            if (isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen) {
+                return { word: "আপনি", confidence: 94, source: "১ আঙুল ☝️" };
+            }
+            if (isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen) {
+                return { word: "সাহায্য প্রয়োজন", confidence: 93, source: "২ আঙুল ✌️" };
+            }
+            if (openFingersCount >= 3) {
+                return { word: "কেমন আছেন?", confidence: 94, source: "খোলা হাত 🖐️" };
+            }
+
+            return null;
+        }
+
+        function handleFastPrediction(word, confidence, sourceLabel) {
+            const currentWordEl = document.getElementById('currentWord');
+            const sourceTag = document.getElementById('gestureSourceTag');
+            const confPercent = document.getElementById('confidencePercent');
+            const confBar = document.getElementById('confidenceBar');
+            const lockBadge = document.getElementById('lockProgressBadge');
+
+            currentWordEl.innerText = word;
+            sourceTag.innerText = sourceLabel;
+            sourceTag.classList.remove('hidden');
+            confPercent.innerText = `${confidence}%`;
+            confBar.style.width = `${confidence}%`;
+
+            predictionBuffer.push(word);
+            if (predictionBuffer.length > REQUIRED_FRAMES) {
+                predictionBuffer.shift();
+            }
+
+            const isConfirmed = predictionBuffer.length === REQUIRED_FRAMES && predictionBuffer.every(w => w === word);
+
+            if (isConfirmed) {
+                lockBadge.classList.remove('hidden');
+                const now = Date.now();
+                if (word !== lastCapturedWord || (now - lastCapturedTime) > 1650) {
+                    addWordToSentence(word);
+                    lastCapturedWord = word;
+                    lastCapturedTime = now;
+                }
+            }
+        }
+
+        function manualTrigger(word, sourceLabel) {
+            unlockAudioEngine();
+            document.getElementById('currentWord').innerText = word;
+            const sourceTag = document.getElementById('gestureSourceTag');
+            sourceTag.innerText = sourceLabel;
+            sourceTag.classList.remove('hidden');
+            document.getElementById('confidencePercent').innerText = "100%";
+            document.getElementById('confidenceBar').style.width = "100%";
+
+            addWordToSentence(word);
+            speakText(word);
+        }
+
+        function addWordToSentence(word) {
+            if (sentenceWords[sentenceWords.length - 1] !== word) {
+                sentenceWords.push(word);
+                document.getElementById('sentenceOutput').innerText = sentenceWords.join(" ");
+                hasSpokenCurrentSentence = false;
+
+                if (document.getElementById('autoSpeak').checked) {
+                    speakText(word);
+                }
+            }
+        }
+
+        function clearSentence() {
+            sentenceWords = [];
+            lastCapturedWord = "";
+            hasSpokenCurrentSentence = false;
+            document.getElementById('sentenceOutput').innerText = "...";
+            document.getElementById('currentWord').innerText = "অপেক্ষা করছে...";
+            document.getElementById('gestureSourceTag').classList.add('hidden');
+            document.getElementById('confidencePercent').innerText = "0%";
+            document.getElementById('confidenceBar').style.width = "0%";
+        }
+
+        function speakCurrentWord() {
+            unlockAudioEngine();
+            const word = document.getElementById('currentWord').innerText;
+            if (word && word !== 'অপেক্ষা করছে...') {
+                speakText(word);
+            }
+        }
+
+        function speakSentence() {
+            unlockAudioEngine();
+            const text = document.getElementById('sentenceOutput').innerText;
+            if (text && text !== '...') {
+                speakText(text);
+            }
+        }
+
+        function speakText(text) {
+            if (!text || text === '...' || text === 'অপেক্ষা করছে...') return;
+
+            const speakerBtn = document.getElementById('speakerBtn');
+            if (speakerBtn) speakerBtn.classList.add('speaking-pulse');
+
+            playToneFeedback(540, 720, 0.09);
+
+            if (!('speechSynthesis' in window)) {
+                if (speakerBtn) setTimeout(() => speakerBtn.classList.remove('speaking-pulse'), 600);
+                return;
+            }
+
+            try {
+                loadVoices();
+                if (window.speechSynthesis.speaking) {
+                    window.speechSynthesis.cancel();
+                }
+                if (window.speechSynthesis.paused) {
+                    window.speechSynthesis.resume();
+                }
+
+                const bnVoice =
+                    availableVoices.find(v => v.lang && v.lang.toLowerCase().includes('bn-bd')) ||
+                    availableVoices.find(v => v.lang && v.lang.toLowerCase().includes('bn-in')) ||
+                    availableVoices.find(v => v.lang && v.lang.toLowerCase().startsWith('bn')) ||
+                    availableVoices.find(v => v.default) ||
+                    availableVoices[0] ||
+                    null;
+
+                setTimeout(() => {
+                    try {
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        if (bnVoice) utterance.voice = bnVoice;
+                        utterance.lang = (bnVoice && bnVoice.lang && bnVoice.lang.toLowerCase().startsWith('bn')) ? bnVoice.lang : 'bn-BD';
+                        utterance.rate = 0.95;
+                        utterance.pitch = 1.0;
+                        utterance.volume = 1.0;
+
+                        utterance.onend = () => {
+                            if (speakerBtn) speakerBtn.classList.remove('speaking-pulse');
+                        };
+                        utterance.onerror = () => {
+                            if (speakerBtn) speakerBtn.classList.remove('speaking-pulse');
+                        };
+
+                        window.speechSynthesis.speak(utterance);
+
+                        setTimeout(() => {
+                            if (speakerBtn) speakerBtn.classList.remove('speaking-pulse');
+                        }, 2500);
+                    } catch (innerErr) {
+                        if (speakerBtn) speakerBtn.classList.remove('speaking-pulse');
+                    }
+                }, 60);
+            } catch (e) {
+                if (speakerBtn) speakerBtn.classList.remove('speaking-pulse');
+            }
+        }
+
+        function playToneFeedback(freqStart, freqEnd, durationSec) {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                if (!sharedAudioCtx) sharedAudioCtx = new AudioCtx();
+                if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+
+                const osc = sharedAudioCtx.createOscillator();
+                const gain = sharedAudioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freqStart, sharedAudioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(freqEnd, sharedAudioCtx.currentTime + durationSec);
+                gain.gain.setValueAtTime(0.05, sharedAudioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + durationSec + 0.03);
+                osc.connect(gain);
+                gain.connect(sharedAudioCtx.destination);
+                osc.start();
+                osc.stop(sharedAudioCtx.currentTime + durationSec + 0.04);
+            } catch (e) {}
+        }
+
+        function toggleTrainerModal() {
+            const modal = document.getElementById('trainerModal');
+            modal.classList.toggle('hidden');
+            updateTrainingUI();
+        }
+
+        function captureTrainingSample(word) {
+            if (!latestHandVector) {
+                showToast("আগে ক্যামেরা চালু করে সামনে হাত ধরুন!");
+                return;
+            }
+            customTrainingData.push({ word: word, vector: [...latestHandVector] });
+            try {
+                localStorage.setItem('bdsl_custom_vectors_v1', JSON.stringify(customTrainingData));
+            } catch (e) {}
+
+            updateTrainingUI();
+            const fb = document.getElementById('trainFeedback');
+            fb.classList.remove('hidden');
+            setTimeout(() => fb.classList.add('hidden'), 1500);
+            speakText(word);
+        }
+
+        function resetCustomTraining() {
+            customTrainingData = [];
+            try {
+                localStorage.removeItem('bdsl_custom_vectors_v1');
+            } catch (e) {}
+            updateTrainingUI();
+            showToast("সব কাস্টম ট্রেনিং ডাটা মুছে ফেলা হয়েছে!");
+        }
+
+        function updateTrainingUI() {
+            document.getElementById('trainedCountBadge').innerText = `কাস্টম ডাটা: ${customTrainingData.length}`;
+            const words = [
+                'আসসালামু আলাইকুম',
+                'আপনি কেমন আছেন?',
+                'আমি ভালো আছি',
+                'আপনার দিনকাল কেমন যাচ্ছে?',
+                'সাহায্য প্রয়োজন',
+                'ধন্যবাদ'
+            ];
+            words.forEach(w => {
+                const el = document.getElementById(`count_${w}`);
+                if (el) {
+                    const count = customTrainingData.filter(d => d.word === w).length;
+                    el.innerText = `স্যাম্পল: ${count} টি`;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
