@@ -1,680 +1,311 @@
-```html
+
 <!DOCTYPE html>
 <html lang="bn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BdSL Voice Pro - Final Edition</title>
-    <!-- Tailwind CSS CDN -->
+    <title>BdSL Voice - প্রো এআই বাংলা ইশারা অনুবাদক</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
+
+    <!-- Ultra-Fast MediaPipe Hands AI (Zero-Lag Mobile Optimized) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <!-- Google Fonts: Hind Siliguri -->
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Google MediaPipe Hands AI (Dual-Hand + Motion Tracking) -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <!-- QRCode.js for In-App QR Code Generator -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         body {
             font-family: 'Hind Siliguri', sans-serif;
             background-color: #020617;
             color: #f8fafc;
-            overscroll-behavior: none;
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
-        .mirror {
+        .mirror-video {
             transform: scaleX(-1);
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.35); }
+            50% { box-shadow: 0 0 28px rgba(16, 185, 129, 0.75); }
+        }
+        .active-glow {
+            animation: pulse-glow 2s infinite;
+        }
+        @keyframes wave-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+        .speaking-pulse {
+            animation: wave-pulse 0.6s infinite;
+            background-color: rgba(16, 185, 129, 0.35) !important;
+            border-color: #10b981 !important;
         }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between bg-slate-950">
 
-    <!-- MINIMAL APP HEADER -->
-    <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex justify-between items-center sticky top-0 z-40">
+    <!-- Top Header -->
+    <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
         <div class="flex items-center gap-2.5">
-            <div class="bg-emerald-500 text-slate-950 w-9 h-9 rounded-xl flex items-center justify-center shadow-md shadow-emerald-500/20">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
                 <i class="fa-solid fa-hands-asl-interpreting text-lg"></i>
             </div>
             <div>
-                <h1 class="font-bold text-base text-white leading-none">BdSL Voice <span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded ml-1">FINAL</span></h1>
-                <span id="aiModeBadge" class="text-[11px] text-emerald-400">ডুয়াল-হ্যান্ড ও মোশন AI ইঞ্জিন</span>
+                <h1 class="font-bold text-sm text-white leading-none">BdSL Voice <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded ml-1">TURBO PRO</span></h1>
+                <span id="aiModeBadge" class="text-[10px] text-emerald-400">স্মুথ ডুয়াল-হ্যান্ড এআই ইঞ্জিন</span>
             </div>
         </div>
 
-        <div class="flex items-center gap-2">
-            <!-- QR Code Button -->
-            <button onclick="openQRModal()" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-1.5 rounded-xl border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all">
-                <i class="fa-solid fa-qrcode"></i> QR কোড
+        <div class="flex items-center gap-1.5">
+            <button onclick="toggleTrainerModal()" title="AI ট্রেইন করুন" class="px-2.5 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 text-xs font-semibold flex items-center gap-1 transition active:scale-95">
+                <i class="fa-solid fa-graduation-cap"></i> ট্রেইন AI
             </button>
-            <span class="inline-flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-[11px] text-slate-300">
+            <button onclick="switchCamera()" title="ক্যামেরা পরিবর্তন" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex items-center justify-center transition active:scale-95">
+                <i class="fa-solid fa-camera-rotate text-xs"></i>
+            </button>
+            <div id="statusIndicator" class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-2 py-1.5 rounded-xl text-[11px] font-medium text-slate-300">
                 <span id="statusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
-                <span id="cameraStatus">অপেক্ষমাণ</span>
-            </span>
+                <span id="statusText">প্রস্তুত</span>
+            </div>
         </div>
     </header>
 
-    <!-- MAIN TRANSLATOR SCREEN -->
-    <main class="flex-1 flex flex-col max-w-lg w-full mx-auto p-3.5 gap-3.5 justify-between">
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col max-w-lg w-full mx-auto p-3 gap-2.5">
+        
+        <!-- Camera Viewport -->
+        <div class="relative w-full aspect-[4/3] bg-slate-900 rounded-3xl overflow-hidden border-2 border-slate-800 shadow-2xl">
+            <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover mirror-video"></video>
+            <canvas id="outputCanvas" class="absolute inset-0 w-full h-full object-cover pointer-events-none mirror-video"></canvas>
 
-        <!-- CAMERA VIEWPORT -->
-        <div class="relative flex-1 min-h-[280px] bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center">
-            <video id="webcam" class="absolute inset-0 w-full h-full object-cover mirror" playsinline autoplay muted></video>
-            <!-- AI Dual-Hand Skeleton Canvas Overlay -->
-            <canvas id="outputCanvas" class="absolute inset-0 w-full h-full object-cover mirror pointer-events-none z-10"></canvas>
-
-            <!-- Hand Detection Guide Box -->
-            <div id="guideBox" class="relative w-60 h-60 sm:w-72 sm:h-72 border-2 border-dashed border-emerald-400/40 rounded-3xl flex flex-col items-center justify-center pointer-events-none z-10">
-                <span id="handCountBadge" class="text-[10px] text-emerald-300 bg-slate-950/75 px-3 py-1 rounded-full backdrop-blur-sm mt-auto mb-3">এক বা দুই হাতের ইশারা দেখান</span>
+            <!-- Live Status Pills -->
+            <div class="absolute top-3 left-3 z-20 flex flex-wrap gap-1.5">
+                <div class="bg-slate-950/85 backdrop-blur-md text-emerald-400 text-[10px] font-semibold px-2.5 py-1 rounded-full border border-emerald-500/40 flex items-center gap-1">
+                    <i class="fa-solid fa-bolt text-amber-400"></i> <span id="fpsCounter">Dual-Hand Turbo</span>
+                </div>
             </div>
 
-            <!-- Floating Camera Controls -->
-            <div class="absolute top-3 right-3 z-20 flex flex-col gap-2">
-                <button onclick="switchCamera()" class="bg-slate-950/70 backdrop-blur-md text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-800 border border-slate-700 active:scale-95 transition-all" title="ক্যামেরা পরিবর্তন">
-                    <i class="fa-solid fa-camera-rotate"></i>
-                </button>
-                <button onclick="toggleMirror()" class="bg-slate-950/70 backdrop-blur-md text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-800 border border-slate-700 active:scale-95 transition-all" title="মিরর ভিউ">
-                    <i class="fa-solid fa-left-right"></i>
-                </button>
+            <!-- Instant Detection Feedback -->
+            <div id="lockProgressBadge" class="absolute top-3 right-3 z-20 bg-emerald-500 text-slate-950 text-[10px] font-bold px-2.5 py-1 rounded-full hidden shadow-lg">
+                শনাক্ত ✓
             </div>
 
-            <!-- Speed Mode Toggle -->
-            <div class="absolute top-3 left-3 z-20">
-                <button onclick="toggleFastMode()" id="speedBtn" class="bg-slate-950/75 backdrop-blur-md text-emerald-400 text-[11px] font-semibold px-3 py-1.5 rounded-full border border-emerald-500/40 flex items-center gap-1.5">
-                    <i class="fa-solid fa-bolt"></i> <span id="speedLabel">ফাস্ট মোড: চালু</span>
-                </button>
+            <!-- Bottom Hand Status Pill -->
+            <div class="absolute inset-x-0 bottom-0 flex justify-center pointer-events-none z-20">
+                <span id="handCountBadge" class="text-[10px] text-emerald-300 bg-slate-950/85 px-3 py-1 rounded-full backdrop-blur-sm mb-2.5 border border-slate-800 transition-all">
+                    ক্যামেরার সামনে হাত আনুন
+                </span>
             </div>
 
             <!-- Start Camera Overlay Button -->
-            <div id="startOverlay" class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center">
-                <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mb-4">
-                    <i class="fa-solid fa-video text-2xl"></i>
+            <div id="startOverlay" class="absolute inset-0 bg-slate-900/95 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center">
+                <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mb-4 active-glow">
+                    <i class="fa-solid fa-hands-asl-interpreting text-2xl"></i>
                 </div>
-                <h2 class="text-lg font-bold text-white mb-1">অ্যাডভান্সড AI চালু করুন</h2>
-                <p class="text-xs text-slate-400 mb-5 max-w-xs">এক হাত, দুই হাত এবং হাতের মোশন ইশারা শনাক্ত করে দ্রুত পূর্ণাঙ্গ বাক্য তৈরি করতে সক্ষম</p>
-                <button onclick="startCamera()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-2xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-2">
+                <h2 class="text-lg font-bold text-white mb-1">টার্বো AI অনুবাদক চালু করুন</h2>
+                <p class="text-xs text-slate-400 mb-5 max-w-xs">জিরো-ল্যাগ ডুয়াল-হ্যান্ড ডিটেকশন এবং রিয়েল-টাইম বাংলা ভয়েস ইঞ্জিন</p>
+                <button id="startBtn" type="button" onclick="startCamera()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-2xl shadow-lg shadow-emerald-500/25 active:scale-95 transition-all flex items-center gap-2 cursor-pointer">
                     <i class="fa-solid fa-power-off"></i> অনুবাদ শুরু করুন
                 </button>
+                <p id="errorMsg" class="text-xs text-rose-400 mt-3 hidden"></p>
             </div>
         </div>
 
-        <!-- QUICK PERSONAL SENTENCE BAR (Labib Special) -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 space-y-1.5">
-            <div class="text-[10px] text-slate-400 font-semibold px-1 flex justify-between items-center">
-                <span>মেলা প্রেজেন্টেশনের কুইক শর্টকাট:</span>
-                <span class="text-emerald-400">এক ক্লিকে ভয়েস আউটপুট</span>
-            </div>
-            <div class="grid grid-cols-3 gap-1.5">
-                <button onclick="processSign('আমার নাম লাবিব', 99, 'ব্যক্তিগত তথ্য')" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-medium py-2 px-2 rounded-xl border border-emerald-500/30 text-center truncate">
-                    আমার নাম লাবিব
-                </button>
-                <button onclick="processSign('আমি কলেজে পড়ি', 99, 'ব্যক্তিগত তথ্য')" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-medium py-2 px-2 rounded-xl border border-emerald-500/30 text-center truncate">
-                    আমি কলেজে পড়ি
-                </button>
-                <button onclick="processSign('আমার বাড়ি শরীয়তপুর', 99, 'ব্যক্তিগত তথ্য')" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-medium py-2 px-2 rounded-xl border border-emerald-500/30 text-center truncate">
-                    বাড়ি শরীয়তপুর
-                </button>
-            </div>
-        </div>
-
-        <!-- TRANSLATION OUTPUT CARD -->
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+        <!-- Live Translation & Sentence Builder Card -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-3.5 shadow-xl flex flex-col gap-2.5">
             
-            <!-- Output Display & Voice Button -->
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex-1">
-                    <div class="flex items-center gap-2 mb-0.5">
-                        <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">শনাক্তকৃত ইশারা</span>
-                        <span id="gestureTypeTag" class="text-[10px] bg-slate-800 text-cyan-400 px-2 py-0.5 rounded-full hidden">২-হাত জটিল ইশারা</span>
-                    </div>
-                    <div id="translatedText" class="text-2xl sm:text-3xl font-bold text-emerald-400 min-h-[2.2rem] flex items-center">
-                        অপেক্ষা করছি...
+            <!-- Instant Detected Word -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 block">তাৎক্ষণিক শনাক্তকৃত অর্থ</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="currentWord" class="text-2xl font-bold text-emerald-400 transition-all">অপেক্ষা করছে...</span>
+                        <span id="gestureSourceTag" class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md hidden">AI</span>
                     </div>
                 </div>
-
-                <button onclick="speakCurrentText()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 w-13 h-13 p-3.5 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-95 transition-all shrink-0" title="ভয়েস শুনুন">
-                    <i class="fa-solid fa-volume-high text-xl"></i>
+                <button id="speakerBtn" onclick="speakCurrentWord()" title="ভয়েস শুনুন" class="w-11 h-11 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 flex items-center justify-center active:scale-95 transition">
+                    <i class="fa-solid fa-volume-high text-lg"></i>
                 </button>
             </div>
 
-            <!-- Accuracy Bar -->
-            <div class="space-y-1">
-                <div class="flex justify-between text-[11px]">
-                    <span class="text-slate-400">নিউরাল নেটওয়ার্ক কনফিডেন্স</span>
-                    <span id="confidenceText" class="text-emerald-400 font-semibold">0%</span>
+            <!-- Confidence Progress Bar -->
+            <div>
+                <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <span>AI কনফিডেন্স স্কোর</span>
+                    <span id="confidencePercent" class="text-emerald-400 font-semibold">0%</span>
                 </div>
-                <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                    <div id="confidenceBar" class="bg-emerald-500 h-full w-0 transition-all duration-200"></div>
-                </div>
-            </div>
-
-            <!-- Sentence Builder / Continuous Speech -->
-            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 flex items-center justify-between gap-2">
-                <div class="overflow-x-auto whitespace-nowrap text-sm text-slate-300 flex-1">
-                    <span class="text-emerald-500 text-xs font-semibold mr-1">পূর্ণ বাক্য:</span>
-                    <span id="sentenceBox" class="font-medium text-white">...</span>
-                </div>
-                <div class="flex gap-1.5 shrink-0">
-                    <button onclick="speakSentence()" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-lg border border-emerald-500/30 font-medium" title="পুরো বাক্য বলুন">
-                        <i class="fa-solid fa-play mr-1"></i> বলুন
-                    </button>
-                    <button onclick="clearSentence()" class="text-xs bg-slate-800 hover:bg-slate-700 text-rose-400 px-2.5 py-1.5 rounded-lg border border-slate-700" title="মুছে ফেলুন">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="confidenceBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-150" style="width: 0%"></div>
                 </div>
             </div>
 
-            <!-- Complex Gesture Dictionary -->
-            <div class="pt-1.5 border-t border-slate-800">
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-[11px] text-slate-400 font-medium">ট্রেইনড কমপ্লেক্স ইশারা তালিকা:</span>
-                    <label class="inline-flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+            <!-- Continuous Sentence Builder Box -->
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] text-slate-400 font-medium">পূর্ণাঙ্গ বাক্য (হাত নামালেই অটো ভয়েস বলবে):</span>
+                    <label class="flex items-center gap-1.5 text-[11px] text-emerald-400 cursor-pointer font-medium">
                         <input type="checkbox" id="autoSpeak" checked class="accent-emerald-500 rounded">
-                        <span>অটো ভয়েস</span>
+                        অটো ভয়েস
                     </label>
                 </div>
-                
-                <div class="grid grid-cols-4 gap-1.5 max-h-[130px] overflow-y-auto pr-1 text-center">
-                    <button onclick="processSign('নমস্কার / সালাম', 99, '২-হাত যুক্ত')" class="bg-slate-800/90 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-cyan-500/30">
-                        <div class="text-[11px] font-bold text-cyan-300">নমস্কার</div>
-                        <div class="text-[9px] text-slate-400">২ হাত জোড়</div>
-                    </button>
-                    <button onclick="processSign('বাড়ি / ঘর', 97, '২-হাত ত্রিভুজ')" class="bg-slate-800/90 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-cyan-500/30">
-                        <div class="text-[11px] font-bold text-cyan-300">বাড়ি / ঘর</div>
-                        <div class="text-[9px] text-slate-400">ছাদ তৈরি</div>
-                    </button>
-                    <button onclick="processSign('বই / পড়া', 96, '২-হাত খোলা')" class="bg-slate-800/90 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-cyan-500/30">
-                        <div class="text-[11px] font-bold text-cyan-300">বই / পড়া</div>
-                        <div class="text-[9px] text-slate-400">খোলা বই</div>
-                    </button>
-                    <button onclick="processSign('বিদায় / টাটা', 98, 'মোশন ইশারা')" class="bg-slate-800/90 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-amber-500/30">
-                        <div class="text-[11px] font-bold text-amber-300">বিদায়</div>
-                        <div class="text-[9px] text-slate-400">হাত নাড়ানো</div>
-                    </button>
-
-                    <button onclick="processSign('আমি', 97, 'বুক নির্দেশ')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">আমি</div>
-                        <div class="text-[9px] text-emerald-400">বুকে আঙুল</div>
-                    </button>
-                    <button onclick="processSign('তুমি', 96, 'সামনে নির্দেশ')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">তুমি</div>
-                        <div class="text-[9px] text-emerald-400">১ আঙুল</div>
-                    </button>
-                    <button onclick="processSign('কেন / কী?', 95, 'বাঁকানো আঙুল')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">কেন / কী?</div>
-                        <div class="text-[9px] text-emerald-400">প্রশ্ন</div>
-                    </button>
-                    <button onclick="processSign('ঠিক আছে', 98, 'OK সাইন')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">ঠিক আছে</div>
-                        <div class="text-[9px] text-emerald-400">OK</div>
-                    </button>
-
-                    <button onclick="processSign('হ্যালো', 98, 'খোলা হাত')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">হ্যালো</div>
-                        <div class="text-[9px] text-emerald-400">৫ আঙুল</div>
-                    </button>
-                    <button onclick="processSign('ধন্যবাদ', 99, 'বৃদ্ধাঙ্গুলি')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">ধন্যবাদ</div>
-                        <div class="text-[9px] text-emerald-400">👍 সাইন</div>
-                    </button>
-                    <button onclick="processSign('সমস্যা / খারাপ', 96, 'নিচের দিকে')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">সমস্যা</div>
-                        <div class="text-[9px] text-emerald-400">👎 সাইন</div>
-                    </button>
-                    <button onclick="processSign('ভালোবাসা', 98, 'ILY সাইন')" class="bg-slate-800 hover:bg-slate-700 py-1.5 px-1 rounded-xl border border-slate-700">
-                        <div class="text-[11px] font-bold text-white">ভালোবাসা</div>
-                        <div class="text-[9px] text-emerald-400">🤟 সাইন</div>
-                    </button>
+                <div class="flex items-center justify-between gap-2">
+                    <p id="sentenceOutput" class="text-base font-semibold text-white min-h-[24px] flex-1 break-words">...</p>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="speakSentence()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1 active:scale-95 transition">
+                            <i class="fa-solid fa-volume-high"></i> বলুন
+                        </button>
+                        <button onclick="clearSentence()" title="মুছুন" class="w-8 h-8 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 flex items-center justify-center active:scale-95 transition">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
+            <!-- Practical Gesture Guide Chips -->
+            <div>
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[10px] text-slate-400">দ্রুত কথোপকথন ইশারা (হাত দেখান বা ট্যাপ করুন):</span>
+                    <span id="trainedCountBadge" class="text-[10px] text-sky-400 font-medium">কাস্টম ডাটা: 0</span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 text-center">
+                    <button onclick="manualTrigger('আসসালামু আলাইকুম', '২ হাত জোড় 🙏')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-emerald-400">আসসালামু আলাইকুম</span>
+                        <span class="block text-[9px] text-slate-400">২ হাত জোড় 🙏</span>
+                    </button>
+                    <button onclick="manualTrigger('আপনি', '১ আঙুল ☝️')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-sky-400">আপনি</span>
+                        <span class="block text-[9px] text-slate-400">১ আঙুল ☝️</span>
+                    </button>
+                    <button onclick="manualTrigger('কেমন আছেন?', 'খোলা হাত 🖐️')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-amber-400">কেমন আছেন?</span>
+                        <span class="block text-[9px] text-slate-400">খোলা হাত 🖐️</span>
+                    </button>
+                    <button onclick="manualTrigger('আমি', 'মুষ্টিবদ্ধ হাত ✊')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-purple-400">আমি</span>
+                        <span class="block text-[9px] text-slate-400">মুষ্টিবদ্ধ হাত ✊</span>
+                    </button>
+                    <button onclick="manualTrigger('ভালো আছি', 'থাম্বস আপ 👍')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-emerald-300">ভালো আছি</span>
+                        <span class="block text-[9px] text-slate-400">বৃদ্ধাঙ্গুলি 👍</span>
+                    </button>
+                    <button onclick="manualTrigger('আপনার দিনকাল কেমন যাচ্ছে?', 'ILY ইশারা 🤟')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-rose-400">দিনকাল কেমন যাচ্ছে?</span>
+                        <span class="block text-[9px] text-slate-400">ILY সাইন 🤟</span>
+                    </button>
+                    <button onclick="manualTrigger('সাহায্য প্রয়োজন', '২ আঙুল ✌️')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-[10px] font-bold text-amber-300">সাহায্য প্রয়োজন</span>
+                        <span class="block text-[9px] text-slate-400">২ আঙুল ✌️</span>
+                    </button>
+                    <button onclick="manualTrigger('ধন্যবাদ', 'OK ইশারা 👌')" class="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 py-1.5 px-1 rounded-xl transition active:scale-95">
+                        <span class="block text-xs font-bold text-white">ধন্যবাদ</span>
+                        <span class="block text-[9px] text-slate-400">OK সাইন 👌</span>
+                    </button>
+                </div>
+            </div>
         </div>
-
     </main>
 
-    <!-- IN-APP QR CODE MODAL -->
-    <div id="qrModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl space-y-4">
-            <div class="flex justify-between items-center">
-                <h3 class="font-bold text-white text-base">জাজদের জন্য প্রজেক্ট QR কোড</h3>
-                <button onclick="closeQRModal()" class="text-slate-400 hover:text-white w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
+    <!-- Custom Error / Info Toast -->
+    <div id="customToast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-4 py-2.5 rounded-full border border-slate-700 shadow-xl z-50 hidden"></div>
+
+    <!-- Live Custom AI Training Modal (KNN Vector Trainer) -->
+    <div id="trainerModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-5 shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-brain text-emerald-400"></i> লাইভ AI মডেল ট্রেইনার
+                </h3>
+                <button onclick="toggleTrainerModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            <p class="text-xs text-slate-400">মোবাইল ক্যামেরা দিয়ে স্ক্যান করলেই এই অ্যাপটি ওপেন হয়ে যাবে:</p>
+            <p class="text-xs text-slate-400 mb-4">আপনার নিজের হাতের যেকোনো ইশারা ক্যামেরার সামনে ধরে নিচের শব্দগুলোতে ২-৩ বার চাপ দিয়ে AI-কে শিখিয়ে দিন:</p>
             
-            <div class="bg-white p-4 rounded-2xl flex items-center justify-center inline-block shadow-inner mx-auto">
-                <div id="qrcodeContainer"></div>
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <button onclick="captureTrainingSample('আসসালামু আলাইকুম')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-emerald-400">আসসালামু আলাইকুম</span>
+                    <span id="count_আসসালামু আলাইকুম" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button onclick="captureTrainingSample('আপনি কেমন আছেন?')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-sky-400">আপনি কেমন আছেন?</span>
+                    <span id="count_আপনি কেমন আছেন?" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button onclick="captureTrainingSample('আমি ভালো আছি')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-amber-400">আমি ভালো আছি</span>
+                    <span id="count_আমি ভালো আছি" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button onclick="captureTrainingSample('আপনার দিনকাল কেমন যাচ্ছে?')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-rose-400">দিনকাল কেমন যাচ্ছে?</span>
+                    <span id="count_আপনার দিনকাল কেমন যাচ্ছে?" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button onclick="captureTrainingSample('সাহায্য প্রয়োজন')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-purple-400">সাহায্য প্রয়োজন</span>
+                    <span id="count_সাহায্য প্রয়োজন" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
+                <button onclick="captureTrainingSample('ধন্যবাদ')" class="bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 p-2.5 rounded-xl text-left transition">
+                    <span class="block text-xs font-bold text-white">ধন্যবাদ</span>
+                    <span id="count_ধন্যবাদ" class="text-[10px] text-slate-400">স্যাম্পল: 0 টি</span>
+                </button>
             </div>
 
-            <p id="currentAppUrlText" class="text-[10px] text-emerald-400 font-mono truncate px-2"></p>
-            
-            <button onclick="closeQRModal()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-all">
-                বন্ধ করুন
-            </button>
+            <div id="trainFeedback" class="text-xs text-center text-emerald-400 mb-3 hidden">✓ ইশারার ভেক্টর ডাটা সফলভাবে যুক্ত হয়েছে!</div>
+
+            <div class="flex justify-between gap-2">
+                <button onclick="resetCustomTraining()" class="px-3 py-2 rounded-xl bg-rose-500/15 text-rose-400 text-xs font-semibold border border-rose-500/30">
+                    ডাটা রিসেট
+                </button>
+                <button onclick="toggleTrainerModal()" class="px-5 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-bold">
+                    সম্পন্ন করুন
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- Hidden Audio Element -->
-    <audio id="ttsAudio" preload="none"></audio>
-
-    <!-- JAVASCRIPT ENGINE -->
+    <!-- SMOOTH TURBO HANDS ENGINE + DUAL-HAND SALAM ONLY + MULTI-LAYER BANGLA VOICE -->
     <script>
         let currentStream = null;
         let facingMode = "user";
-        let isMirrored = true;
         let sentenceWords = [];
         let handsDetector = null;
         let isRunningAI = false;
+        let isProcessingFrame = false;
+        let lastFrameTime = 0;
 
-        let isFastMode = true;
-        let requiredFrames = 5;
-        let repeatCooldown = 1400;
+        let latestHandVector = null;
+        let customTrainingData = [];
 
-        let stableGesture = "";
-        let gestureFrameCount = 0;
-        let lastSpokenWord = "";
-        let lastSpokenTime = 0;
-        let wristHistoryX = [];
+        try {
+            const saved = localStorage.getItem('bdsl_custom_vectors_v1');
+            if (saved) customTrainingData = JSON.parse(saved);
+        } catch (e) {}
 
-        // Initialize QR Code on load
-        window.addEventListener('DOMContentLoaded', () => {
-            const currentUrl = window.location.href;
-            document.getElementById('currentAppUrlText').innerText = currentUrl;
-            
-            // Generate QR code element
-            const qrContainer = document.getElementById('qrcodeContainer');
-            qrContainer.innerHTML = "";
-            new QRCode(qrContainer, {
-                text: currentUrl,
-                width: 150,
-                height: 150,
-                colorDark: "#020617",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
-        });
+        // Tuned for ultra-smooth stability without false triggers
+        const REQUIRED_FRAMES = 3;
+        const SENTENCE_PAUSE_MS = 1100;
+        let predictionBuffer = [];
+        let lastCapturedWord = "";
+        let lastCapturedTime = 0;
+        let sentenceSpeakTimer = null;
+        let hasSpokenCurrentSentence = false;
+        let availableVoices = [];
+        let sharedAudioCtx = null;
 
-        function openQRModal() {
-            document.getElementById('qrModal').classList.remove('hidden');
+        function showToast(msg) {
+            const toast = document.getElementById('customToast');
+            toast.innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2800);
         }
 
-        function closeQRModal() {
-            document.getElementById('qrModal').classList.add('hidden');
-        }
-
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.getVoices();
-            window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
-        }
-
-        function toggleFastMode() {
-            isFastMode = !isFastMode;
-            requiredFrames = isFastMode ? 5 : 11;
-            repeatCooldown = isFastMode ? 1400 : 2500;
-            document.getElementById('speedLabel').innerText = isFastMode ? "ফাস্ট মোড: চালু" : "সাধারণ মোড";
-        }
-
-        function initMediaPipeHands() {
-            if (handsDetector) return;
-            
-            handsDetector = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-            });
-
-            handsDetector.setOptions({
-                maxNumHands: 2,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.65,
-                minTrackingConfidence: 0.65
-            });
-
-            handsDetector.onResults(onHandResults);
-        }
-
-        function onHandResults(results) {
-            const canvas = document.getElementById('outputCanvas');
-            const ctx = canvas.getContext('2d');
-            const video = document.getElementById('webcam');
-            const handBadge = document.getElementById('handCountBadge');
-
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const hands = results.multiHandLandmarks;
-
-            if (hands && hands.length > 0) {
-                handBadge.innerText = hands.length === 2 ? "২টি হাত শনাক্ত হয়েছে (জটিল মোড)" : "১টি হাত শনাক্ত হয়েছে";
-
-                hands.forEach((lm, idx) => {
-                    const color = idx === 0 ? "#10b981" : "#38bdf8";
-                    drawHandSkeleton(ctx, lm, canvas.width, canvas.height, color);
-                });
-
-                let detection = null;
-
-                if (hands.length === 2) {
-                    detection = classifyDualHandSign(hands[0], hands[1]);
-                }
-
-                if (!detection) {
-                    detection = classifySingleHandAndMotion(hands[0]);
-                }
-
-                if (detection) {
-                    if (detection.word === stableGesture) {
-                        gestureFrameCount++;
-                        if (gestureFrameCount === requiredFrames) {
-                            const now = Date.now();
-                            if (detection.word !== lastSpokenWord || (now - lastSpokenTime > repeatCooldown)) {
-                                lastSpokenWord = detection.word;
-                                lastSpokenTime = now;
-                                const accuracy = Math.floor(Math.random() * (99 - 94 + 1)) + 94;
-                                processSign(detection.word, accuracy, detection.tag);
-                            }
-                        }
-                    } else {
-                        stableGesture = detection.word;
-                        gestureFrameCount = 1;
-                    }
-                }
-            } else {
-                handBadge.innerText = "এক বা দুই হাতের ইশারা দেখান";
-                stableGesture = "";
-                gestureFrameCount = 0;
-                wristHistoryX = [];
-            }
-        }
-
-        function getDist(p1, p2) {
-            return Math.hypot(p1.x - p2.x, p1.y - p2.y);
-        }
-
-        function classifyDualHandSign(h1, h2) {
-            const wristDist = getDist(h1[0], h2[0]);
-            const indexTipDist = getDist(h1[8], h2[8]);
-            const middleTipDist = getDist(h1[12], h2[12]);
-            const pinkyDist = getDist(h1[20], h2[20]);
-
-            if (wristDist < 0.16 && indexTipDist < 0.14 && middleTipDist < 0.14) {
-                return { word: "নমস্কার / সালাম", tag: "২-হাত যুক্ত ইশারা" };
-            }
-
-            if (indexTipDist < 0.11 && middleTipDist < 0.13 && wristDist > 0.22) {
-                return { word: "বাড়ি / ঘর", tag: "২-হাত ত্রিভুজ ইশারা" };
-            }
-
-            if (pinkyDist < 0.15 && indexTipDist > 0.20 && wristDist < 0.25) {
-                return { word: "বই / পড়া", tag: "২-হাত খোলা ইশারা" };
-            }
-
-            return null;
-        }
-
-        function classifySingleHandAndMotion(lm) {
-            wristHistoryX.push(lm[0].x);
-            if (wristHistoryX.length > 12) wristHistoryX.shift();
-
-            const indexOpen = lm[8].y < lm[6].y;
-            const middleOpen = lm[12].y < lm[10].y;
-            const ringOpen = lm[16].y < lm[14].y;
-            const pinkyOpen = lm[20].y < lm[18].y;
-
-            if (indexOpen && middleOpen && ringOpen && pinkyOpen && wristHistoryX.length >= 8) {
-                const minX = Math.min(...wristHistoryX);
-                const maxX = Math.max(...wristHistoryX);
-                if ((maxX - minX) > 0.14) {
-                    return { word: "বিদায় / টাটা", tag: "গতিশীল মোশন ইশারা" };
-                }
-            }
-
-            const pinchDist = getDist(lm[4], lm[8]);
-            if (pinchDist < 0.055 && middleOpen && ringOpen && pinkyOpen) {
-                return { word: "ঠিক আছে", tag: "OK সাইন" };
-            }
-
-            const thumbUp = (lm[4].y < lm[3].y) && (lm[4].y < lm[5].y) && !indexOpen && !middleOpen && !ringOpen && !pinkyOpen;
-            if (thumbUp) {
-                return { word: "ধন্যবাদ", tag: "বৃদ্ধাঙ্গুলি সাইন" };
-            }
-
-            const thumbDown = (lm[4].y > lm[3].y) && (lm[4].y > lm[17].y) && !indexOpen && !middleOpen && !ringOpen && !pinkyOpen;
-            if (thumbDown) {
-                return { word: "সমস্যা / খারাপ", tag: "নেতিবাচক ইশারা" };
-            }
-
-            const indexHooked = (lm[7].y < lm[6].y) && (lm[8].y > lm[7].y) && !middleOpen && !ringOpen && !pinkyOpen;
-            if (indexHooked) {
-                return { word: "কেন / কী?", tag: "প্রশ্নবোধক ইশারা" };
-            }
-
-            if (indexOpen && !middleOpen && !ringOpen && !pinkyOpen) {
-                if (lm[8].y > 0.62) {
-                    return { word: "আমি", tag: "বুক নির্দেশ ইশারা" };
-                } else {
-                    return { word: "তুমি", tag: "নির্দেশক ইশারা" };
-                }
-            }
-
-            const thumbExtended = Math.abs(lm[4].x - lm[2].x) > 0.06;
-
-            if (thumbExtended && indexOpen && !middleOpen && !ringOpen && pinkyOpen) {
-                return { word: "ভালোবাসা", tag: "ILY সাইন" };
-            }
-
-            if (indexOpen && middleOpen && ringOpen && pinkyOpen && thumbExtended) {
-                return { word: "হ্যালো", tag: "অভিবাদন ইশারা" };
-            }
-
-            return null;
-        }
-
-        function drawHandSkeleton(ctx, landmarks, width, height, strokeColor) {
-            const connections = [
-                [0,1],[1,2],[2,3],[3,4],
-                [0,5],[5,6],[6,7],[7,8],
-                [5,9],[9,10],[10,11],[11,12],
-                [9,13],[13,14],[14,15],[15,16],
-                [13,17],[17,18],[18,19],[19,20],
-                [0,17]
-            ];
-
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = 3;
-
-            for (const [start, end] of connections) {
-                ctx.beginPath();
-                ctx.moveTo(landmarks[start].x * width, landmarks[start].y * height);
-                ctx.lineTo(landmarks[end].x * width, landmarks[end].y * height);
-                ctx.stroke();
-            }
-
-            for (const point of landmarks) {
-                ctx.fillStyle = "#ffffff";
-                ctx.beginPath();
-                ctx.arc(point.x * width, point.y * height, 3.5, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-        }
-
-        function unlockAudio() {
-            if ('speechSynthesis' in window) {
-                const unlockUtterance = new SpeechSynthesisUtterance('');
-                unlockUtterance.volume = 0;
-                window.speechSynthesis.speak(unlockUtterance);
-            }
-            const audio = document.getElementById('ttsAudio');
-            audio.play().catch(() => {});
-        }
-
-        async function startCamera() {
-            unlockAudio();
-
-            const video = document.getElementById('webcam');
-            const status = document.getElementById('cameraStatus');
-            const dot = document.getElementById('statusDot');
-            const overlay = document.getElementById('startOverlay');
-            const badge = document.getElementById('aiModeBadge');
-
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-
-            try {
-                status.innerText = "চালু হচ্ছে...";
-                badge.innerText = "ডুয়াল AI লোড হচ্ছে...";
-                
-                initMediaPipeHands();
-
-                currentStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: facingMode } 
-                });
-                video.srcObject = currentStream;
-                
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        resolve();
-                    };
-                });
-
-                overlay.classList.add('hidden');
-                status.innerText = "PRO AI লাইভ";
-                badge.innerText = "২-হাত ও মোশন AI সক্রিয়";
-                dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
-
-                speakText("অ্যাডভান্সড এআই চালু হয়েছে");
-
-                if (!isRunningAI) {
-                    isRunningAI = true;
-                    processVideoFrames();
-                }
-            } catch (err) {
-                status.innerText = "ক্যামেরা ব্লকড";
-                dot.className = "w-2 h-2 rounded-full bg-rose-500";
-                alert("ক্যামেরা চালু করতে ব্রাউজার থেকে Camera Permission দিন।");
-            }
-        }
-
-        async function processVideoFrames() {
-            const video = document.getElementById('webcam');
-            if (handsDetector && video.readyState === 4) {
-                await handsDetector.send({ image: video });
-            }
-            if (isRunningAI) {
-                requestAnimationFrame(processVideoFrames);
-            }
-        }
-
-        function switchCamera() {
-            facingMode = (facingMode === "user") ? "environment" : "user";
-            const video = document.getElementById('webcam');
-            const canvas = document.getElementById('outputCanvas');
-            if (facingMode === "environment") {
-                video.classList.remove('mirror');
-                canvas.classList.remove('mirror');
-                isMirrored = false;
-            } else {
-                video.classList.add('mirror');
-                canvas.classList.add('mirror');
-                isMirrored = true;
-            }
-            startCamera();
-        }
-
-        function toggleMirror() {
-            const video = document.getElementById('webcam');
-            const canvas = document.getElementById('outputCanvas');
-            isMirrored = !isMirrored;
-            video.classList.toggle('mirror', isMirrored);
-            canvas.classList.toggle('mirror', isMirrored);
-        }
-
-        function processSign(word, accuracy, tagText = "ইশারা শনাক্ত") {
-            document.getElementById('translatedText').innerText = word;
-            document.getElementById('confidenceBar').style.width = accuracy + '%';
-            document.getElementById('confidenceText').innerText = accuracy + '%';
-
-            const tagEl = document.getElementById('gestureTypeTag');
-            tagEl.innerText = tagText;
-            tagEl.classList.remove('hidden');
-
-            const cleanWord = word.split('/')[0].trim();
-
-            if (sentenceWords[sentenceWords.length - 1] !== cleanWord) {
-                sentenceWords.push(cleanWord);
-                if (sentenceWords.length > 10) sentenceWords.shift();
-                document.getElementById('sentenceBox').innerText = sentenceWords.join(' ');
-            }
-
-            if (document.getElementById('autoSpeak').checked) {
-                speakText(cleanWord);
-            }
-        }
-
-        function speakText(text) {
-            if (!text) return;
-
-            let usedNativeBengali = false;
-
+        function loadVoices() {
             if ('speechSynthesis' in window) {
                 const voices = window.speechSynthesis.getVoices();
-                const bnVoice = voices.find(v => v.lang.includes('bn'));
-
-                if (bnVoice) {
-                    window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.voice = bnVoice;
-                    utterance.lang = 'bn-BD';
-                    utterance.rate = 1.05;
-                    utterance.volume = 1.0;
-                    window.speechSynthesis.speak(utterance);
-                    usedNativeBengali = true;
-                }
-            }
-
-            if (!usedNativeBengali) {
-                const audio = document.getElementById('ttsAudio');
-                audio.pause();
-                audio.src = `https://translate.google.com/translate_tts?ie=UTF-8&tl=bn&client=tw-ob&q=${encodeURIComponent(text)}`;
-                audio.volume = 1.0;
-                audio.play().catch(() => {
-                    if ('speechSynthesis' in window) {
-                        window.speechSynthesis.cancel();
-                        const fallbackUtterance = new SpeechSynthesisUtterance(text);
-                        fallbackUtterance.lang = 'bn-BD';
-                        window.speechSynthesis.speak(fallbackUtterance);
-                    }
-                });
-            }
-        }
-
-        function speakCurrentText() {
-            const txt = document.getElementById('translatedText').innerText;
-            if (txt && txt !== "অপেক্ষা করছি...") {
-                speakText(txt.split('/')[0].trim());
-            }
-        }
-
-        function speakSentence() {
-            if (sentenceWords.length > 0) {
-                speakText(sentenceWords.join(' '));
-            }
-        }
-
-        function clearSentence() {
-            sentenceWords = [];
-            lastSpokenWord = "";
-            stableGesture = "";
-            document.getElementById('sentenceBox').innerText = "...";
-            document.getElementById('translatedText').innerText = "অপেক্ষা করছি...";
-            document.getElementById('gestureTypeTag').classList.add('hidden');
-            document.getElementById('confidenceBar').style.width = '0%';
-            document.getElementById('confidenceText').innerText = '0%';
-        }
-    </script>
-</body>
-</html>
-```
+                if (voices && voices.length > 0) {
+                    availableVoices = voices;
+        
